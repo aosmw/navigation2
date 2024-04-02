@@ -49,6 +49,9 @@ void prepareAndRunBenchmark(
   bool consider_footprint, std::string motion_model,
   std::vector<std::string> critics, benchmark::State & state)
 {
+  double controller_frequency = 50.0;
+  bool visualize = false;
+
   int batch_size = 300;
   int time_steps = 12;
   unsigned int path_points = 50u;
@@ -62,6 +65,7 @@ void prepareAndRunBenchmark(
   double path_step = costmap_settings.resolution;
 
   TestPathSettings path_settings{start_pose, path_points, path_step, path_step};
+  TestControllerSettings controller_settings{controller_frequency, visualize};
   TestOptimizerSettings optimizer_settings{batch_size, time_steps, iteration_count,
     motion_model, consider_footprint};
 
@@ -77,7 +81,14 @@ void prepareAndRunBenchmark(
   addObstacle(costmap, {obst_x, obst_y, obstacle_size, obstacle_cost});
 
   printInfo(optimizer_settings, path_settings, critics);
-  auto node = getDummyNode(optimizer_settings, critics);
+
+  rclcpp::NodeOptions options;
+  std::vector<rclcpp::Parameter> params;
+  setUpControllerParams(controller_settings, params);
+  setUpOptimizerParams(optimizer_settings, critics, params);
+  options.parameter_overrides(params);
+
+  auto node = getDummyNode(options);
   auto parameters_handler = std::make_unique<mppi::ParametersHandler>(node);
   auto optimizer = getDummyOptimizer(node, costmap_ros, parameters_handler.get());
 

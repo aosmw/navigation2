@@ -1,9 +1,8 @@
 find_package(benchmark REQUIRED)
 
 set(BENCHMARK_NAMES
-  # FIXME: These need updating after changes to fixtures
-    #optimizer_benchmark
-    #controller_benchmark
+  optimizer_benchmark
+  controller_benchmark
   noise_benchmark
 )
 
