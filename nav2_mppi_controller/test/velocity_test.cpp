@@ -80,6 +80,7 @@ TEST(VelocityTest, ParameterSweep)
   // critics.push_back("PreferForwardCritic");
 
   // Explore parameters for the Polaris ATV Ackermann
+  optimizer_settings.batch_size = 2000;
   optimizer_settings.vx_max = 3.0;
   optimizer_settings.vx_min = -1.0;
   optimizer_settings.wz_max = 0.52;
