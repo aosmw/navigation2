@@ -21,6 +21,7 @@
 #include <xtensor/xmath.hpp>
 #include <xtensor/xrandom.hpp>
 #include <xtensor/xnoalias.hpp>
+#include <xtensor/xadapt.hpp>
 #include <xtensor/xcsv.hpp>
 
 
@@ -39,15 +40,20 @@ void NoiseGenerator::initialize(
   getParam(regenerate_noises_, "regenerate_noises", false);
   getParam(dump_noises_, "dump_noises", true);
   getParam(noise_seed_, "noise_seed", 0);
+  getParam(noise_pregenerate_size_, "noise_pregenerate_size", 1000);
 
   if (noise_seed_ != 0) {
     xt::random::seed(noise_seed_);
   }
 
-  if (regenerate_noises_) {
-    noise_thread_ = std::thread(std::bind(&NoiseGenerator::noiseThread, this));
+  if (noise_pregenerate_size_ != 0) {
+    preGenerateNoisedControls();
   } else {
-    generateNoisedControls();
+    if (regenerate_noises_) {
+      noise_thread_ = std::thread(std::bind(&NoiseGenerator::noiseThread, this));
+    } else {
+      generateNoisedControls();
+    }
   }
 }
 
@@ -77,10 +83,27 @@ void NoiseGenerator::setNoisedControls(
   const models::ControlSequence & control_sequence)
 {
   std::unique_lock<std::mutex> guard(noise_lock_);
+  auto & s = settings_;
 
+  if (noise_pregenerate_size_ != 0)
+  {
+    xt::static_shape<std::size_t, 3> sh =
+      {(size_t)noise_pregenerate_size_, (size_t)s.batch_size, (size_t)s.time_steps};
+    auto a = xt::adapt(pregenerated_noise_, sh);
+    noise_pregenerate_idx_ = (noise_pregenerate_idx_ + 1) % noise_pregenerate_size_;
+    xt::noalias(noises_vx_) = xt::view(a, noise_pregenerate_idx_, xt::all(), xt::all());
+    noise_pregenerate_idx_ = (noise_pregenerate_idx_ + 1) % noise_pregenerate_size_;
+    xt::noalias(noises_wz_) = xt::view(a, noise_pregenerate_idx_, xt::all(), xt::all());
+    if (is_holonomic_) {
+      noise_pregenerate_idx_ = (noise_pregenerate_idx_ + 1) % noise_pregenerate_size_;
+      xt::noalias(noises_vy_) = xt::view(a, noise_pregenerate_idx_, xt::all(), xt::all());
+    }
+  }
   xt::noalias(state.cvx) = control_sequence.vx + noises_vx_;
-  xt::noalias(state.cvy) = control_sequence.vy + noises_vy_;
   xt::noalias(state.cwz) = control_sequence.wz + noises_wz_;
+  if (is_holonomic_) {
+    xt::noalias(state.cvy) = control_sequence.vy + noises_vy_;
+  }
 }
 
 void NoiseGenerator::reset(mppi::models::OptimizerSettings & settings, bool is_holonomic)
@@ -97,10 +120,14 @@ void NoiseGenerator::reset(mppi::models::OptimizerSettings & settings, bool is_h
     ready_ = true;
   }
 
-  if (regenerate_noises_) {
-    noise_cond_.notify_all();
+  if (noise_pregenerate_size_!= 0) {
+    preGenerateNoisedControls();
   } else {
-    generateNoisedControls();
+    if (regenerate_noises_) {
+      noise_cond_.notify_all();
+    } else {
+      generateNoisedControls();
+    }
   }
 }
 
@@ -114,20 +141,49 @@ void NoiseGenerator::noiseThread()
   } while (active_);
 }
 
+void NoiseGenerator::preGenerateNoisedControls()
+{
+  auto & s = settings_;
+
+  pregenerated_noise_.resize(noise_pregenerate_size_ * s.batch_size * s.time_steps);
+  std::random_device rd;
+  std::mt19937 gen(rd());
+  std::normal_distribution<float> d(0.0f, s.sampling_std.vx);
+  for (auto& el : pregenerated_noise_) {
+      el = d(gen);
+  }
+  noise_pregenerate_idx_ = 0;
+}
+
 void NoiseGenerator::generateNoisedControls()
 {
   auto & s = settings_;
 
-  xt::noalias(noises_vx_) = xt::random::randn<float>(
-    {s.batch_size, s.time_steps}, 0.0f,
-    s.sampling_std.vx);
-  xt::noalias(noises_wz_) = xt::random::randn<float>(
-    {s.batch_size, s.time_steps}, 0.0f,
-    s.sampling_std.wz);
-  if (is_holonomic_) {
-    xt::noalias(noises_vy_) = xt::random::randn<float>(
+  if (noise_pregenerate_size_ != 0)
+  {
+    xt::static_shape<std::size_t, 3> sh =
+      {(size_t)noise_pregenerate_size_, (size_t)s.batch_size, (size_t)s.time_steps};
+    auto a = xt::adapt(pregenerated_noise_, sh);
+    noise_pregenerate_idx_ = (noise_pregenerate_idx_ + 1) % noise_pregenerate_size_;
+    xt::noalias(noises_vx_) = xt::view(a, noise_pregenerate_idx_, xt::all(), xt::all());
+    noise_pregenerate_idx_ = (noise_pregenerate_idx_ + 1) % noise_pregenerate_size_;
+    xt::noalias(noises_wz_) = xt::view(a, noise_pregenerate_idx_, xt::all(), xt::all());
+    if (is_holonomic_) {
+      noise_pregenerate_idx_ = (noise_pregenerate_idx_ + 1) % noise_pregenerate_size_;
+      xt::noalias(noises_wz_) = xt::view(a, noise_pregenerate_idx_, xt::all(), xt::all());
+    }
+  } else {
+    xt::noalias(noises_vx_) = xt::random::randn<float>(
       {s.batch_size, s.time_steps}, 0.0f,
-      s.sampling_std.vy);
+      s.sampling_std.vx);
+    xt::noalias(noises_wz_) = xt::random::randn<float>(
+      {s.batch_size, s.time_steps}, 0.0f,
+      s.sampling_std.wz);
+    if (is_holonomic_) {
+      xt::noalias(noises_vy_) = xt::random::randn<float>(
+        {s.batch_size, s.time_steps}, 0.0f,
+        s.sampling_std.vy);
+    }
   }
 
   if (dump_noises_) {

@@ -15,6 +15,7 @@
 #ifndef NAV2_MPPI_CONTROLLER__TOOLS__NOISE_GENERATOR_HPP_
 #define NAV2_MPPI_CONTROLLER__TOOLS__NOISE_GENERATOR_HPP_
 
+#include <vector>
 #include <string>
 #include <memory>
 #include <thread>
@@ -86,6 +87,15 @@ protected:
   void noiseThread();
 
   /**
+   * @brief preGenerate vector of random noise that will
+   * be drawn from by generateNoiseControl() at runtime
+   * Sacrifices startup time and memory for speed at
+   * runtime.  Size of pool controlled by Parameter
+   * noise_pregenerate_size_
+   */
+  void preGenerateNoisedControls();
+
+  /**
    * @brief Generate random controls by gaussian noise with mean in
    * control_sequence_
    *
@@ -107,6 +117,9 @@ protected:
   bool active_{false}, ready_{false}, regenerate_noises_{false};
   bool dump_noises_{false};
   int noise_seed_{0};
+  int noise_pregenerate_size_{0};
+  int noise_pregenerate_idx_{0};
+  std::vector<float> pregenerated_noise_;
 };
 
 }  // namespace mppi
