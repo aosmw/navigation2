@@ -97,6 +97,20 @@ TEST(VelocityTest, ParameterSweep)
 
   auto node = getDummyNode(options);
   auto tf_buffer = std::make_shared<tf2_ros::Buffer>(node->get_clock());
+  tf_buffer->setUsingDedicatedThread(true);  // One-thread broadcasting-listening model
+
+  auto broadcaster =
+    std::make_shared<tf2_ros::TransformBroadcaster>(node);
+  auto tf_listener = std::make_shared<tf2_ros::TransformListener>(*tf_buffer);
+
+  auto map_odom_broadcaster = std::async(
+    std::launch::async, sendTf, "map", "odom", broadcaster, node,
+    20);
+
+  auto odom_base_link_broadcaster = std::async(
+    std::launch::async, sendTf, "odom", "base_link", broadcaster, node,
+    20);
+
   auto costmap_ros = getDummyCostmapRos(costmap_settings);
   costmap_ros->setRobotFootprint(getDummyRectangleFootprint(3.6, 1.8, 1.0, 0.0));
 
@@ -114,6 +128,7 @@ TEST(VelocityTest, ParameterSweep)
   // evalControl args
   auto pose = getDummyPointStamped(node, start_pose);
   auto path = getIncrementalDummyPath(node, path_settings);
+  auto path_handler = getDummyPathHandler(node, costmap_ros, tf_buffer, parameters_handler.get());
 
   nav2_core::GoalChecker * dummy_goal_checker{nullptr};
 
@@ -179,7 +194,8 @@ TEST(VelocityTest, ParameterSweep)
         rclcpp::Parameter("dummy.regenerate_noises", false),
         rclcpp::Parameter("dummy.dump_noises", true),
         rclcpp::Parameter("dummy.noise_seed", 1337),
-        rclcpp::Parameter("dummy.noise_pregenerate_size", 10)
+        rclcpp::Parameter("dummy.noise_pregenerate_size", 10),
+        rclcpp::Parameter("dummy.prune_distance", 5.0)
       });
       EXPECT_TRUE(ret.successful);
 
@@ -231,8 +247,14 @@ TEST(VelocityTest, ParameterSweep)
         EXPECT_EQ(node->get_parameter("dummy.vx_std").as_double(), vx_std);
         fresults << "#k,j,i,vx_max,vx_std,wz_max,wz_std,"
                  << "vx_in,wz_in,cmd_vel_vx,cmd_vel_wz" << std::endl;
+        path_handler.setPath(path);
         for (i = 0; i < max_evalControl_iter; i++) {
-          cmd_vel = optimizer->evalControl(pose, v_in, path, dummy_goal_checker);
+          nav_msgs::msg::Path transformed_plan = path_handler.transformPath(pose);
+
+          // TODO: Could integrate velocity to move pose.
+          // Probably different test, would show behaviour evolution with pose change.
+
+          cmd_vel = optimizer->evalControl(pose, v_in, transformed_plan, dummy_goal_checker);
 
           fresults << k
                    << "," << j
