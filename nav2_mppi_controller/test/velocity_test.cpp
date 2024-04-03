@@ -75,9 +75,11 @@ TEST(VelocityTest, ParameterSweep)
     {"PathAngleCritic"}, {"PathFollowCritic"}, {"PreferForwardCritic"}});
 
   // Limit critics being used
-  // critics.clear();
+  critics.clear();
   // critics.push_back("PathFollowCritic");
   // critics.push_back("PreferForwardCritic");
+  critics.push_back("GoalCritic");
+  critics.push_back("PathFollowCritic");
 
   // Explore parameters for the Polaris ATV Ackermann
   optimizer_settings.batch_size = 2000;
@@ -150,7 +152,7 @@ TEST(VelocityTest, ParameterSweep)
   int j;
   int k;
   int vx_std_iter_start = 3;
-  int vx_std_iter_end = 5;
+  int vx_std_iter_end = 6;
   double vx_std_iter_delta = 0.1;
 
   int vx_iter_start = 0;
@@ -158,11 +160,6 @@ TEST(VelocityTest, ParameterSweep)
   double vx_iter_delta = 0.25;
 
   double max_evalControl_iter = 4.0 / optimizer_settings.model_dt;  // Run for 4 seconds
-
-  auto rec_param = std::make_shared<rclcpp::AsyncParametersClient>(
-    node->get_node_base_interface(), node->get_node_topics_interface(),
-    node->get_node_graph_interface(),
-    node->get_node_services_interface());
 
   for(size_t f = 0; f < feedbackFuncs.size(); f++) {
     auto feedbackFunc = feedbackFuncs[f];
@@ -174,19 +171,43 @@ TEST(VelocityTest, ParameterSweep)
 
     for (k = vx_std_iter_start; k <= vx_std_iter_end; k++) {
       double vx_std = vx_std_iter_delta * k;
-      auto results = rec_param->set_parameters_atomically(
-        {rclcpp::Parameter("dummy.verbose", true),
-          rclcpp::Parameter("dummy.vx_std", vx_std),
-          rclcpp::Parameter("dummy.regenerate_noises", false),
-          rclcpp::Parameter("dummy.dump_noises", true),
-          rclcpp::Parameter("dummy.noise_seed", 1337),
-          rclcpp::Parameter("dummy.noise_pregenerate_size", 10),
-          rclcpp::Parameter("AckermannConstraints.min_turning_r", 2.75),
-          rclcpp::Parameter("dummy.PathFollowCritic.cost_weight", 5.0)});
 
-      rclcpp::spin_until_future_complete(
-        node->get_node_base_interface(),
-        results);
+      auto ret = node->set_parameters_atomically(
+      {
+        rclcpp::Parameter("dummy.verbose", true),
+        rclcpp::Parameter("dummy.vx_std", vx_std),
+        rclcpp::Parameter("dummy.regenerate_noises", false),
+        rclcpp::Parameter("dummy.dump_noises", true),
+        rclcpp::Parameter("dummy.noise_seed", 1337),
+        rclcpp::Parameter("dummy.noise_pregenerate_size", 10)
+      });
+      EXPECT_TRUE(ret.successful);
+
+      if (optimizer_settings.motion_model == "Ackermann") {
+        ret = node->set_parameters_atomically(
+        {
+          rclcpp::Parameter("AckermannConstraints.min_turning_r", 2.75)
+        });
+        EXPECT_TRUE(ret.successful);
+      }
+
+      if (std::find(critics.begin(), critics.end(), "PathFollowCritic") != critics.end()) {
+        ret = node->set_parameters_atomically(
+        {
+          rclcpp::Parameter("dummy.PathFollowCritic.cost_weight", 5.0),
+          rclcpp::Parameter("dummy.PathFollowCritic.threshold_to_consider", 5.0)
+        });
+        EXPECT_TRUE(ret.successful);
+      }
+
+      if (std::find(critics.begin(), critics.end(), "GoalCritic") != critics.end()) {
+        ret = node->set_parameters_atomically(
+        {
+          rclcpp::Parameter("dummy.GoalCritic.cost_weight", 5.0),
+          rclcpp::Parameter("dummy.GoalCritic.threshold_to_consider", 5.0)
+        });
+        EXPECT_TRUE(ret.successful);
+      }
 
       EXPECT_EQ(node->get_parameter("dummy.vx_std").as_double(), vx_std);
 
