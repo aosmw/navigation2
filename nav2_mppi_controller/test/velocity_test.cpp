@@ -191,6 +191,7 @@ TEST(VelocityTest, ParameterSweep)
         rclcpp::Parameter("dummy.dump_noises", true),
         rclcpp::Parameter("dummy.noise_seed", 1337),
         rclcpp::Parameter("dummy.noise_pregenerate_size", 10),
+        rclcpp::Parameter("dummy.max_robot_pose_search_dist", path_handler.getMaxCostmapDist()),
         rclcpp::Parameter("dummy.prune_distance", 5.0)
       });
       EXPECT_TRUE(ret.successful);
