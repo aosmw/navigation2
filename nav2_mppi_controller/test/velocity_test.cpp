@@ -99,17 +99,13 @@ TEST(VelocityTest, ParameterSweep)
   auto tf_buffer = std::make_shared<tf2_ros::Buffer>(node->get_clock());
   tf_buffer->setUsingDedicatedThread(true);  // One-thread broadcasting-listening model
 
-  auto broadcaster =
-    std::make_shared<tf2_ros::TransformBroadcaster>(node);
+  auto static_broadcaster =
+    std::make_shared<tf2_ros::StaticTransformBroadcaster>(node);
   auto tf_listener = std::make_shared<tf2_ros::TransformListener>(*tf_buffer);
 
-  auto map_odom_broadcaster = std::async(
-    std::launch::async, sendTf, "map", "odom", broadcaster, node,
-    20);
-
-  auto odom_base_link_broadcaster = std::async(
-    std::launch::async, sendTf, "odom", "base_link", broadcaster, node,
-    20);
+  // Perfect navigation from 0,0
+  sendStaticTf("map", "odom", static_broadcaster, node);
+  sendStaticTf("odom", "base_link", static_broadcaster, node);
 
   auto costmap_ros = getDummyCostmapRos(costmap_settings);
   costmap_ros->setRobotFootprint(getDummyRectangleFootprint(3.6, 1.8, 1.0, 0.0));
