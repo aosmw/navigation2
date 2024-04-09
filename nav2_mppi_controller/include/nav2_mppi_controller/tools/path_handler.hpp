@@ -83,6 +83,13 @@ public:
   nav_msgs::msg::Path & getPath();
 
   /**
+    * @brief Get largest dimension of costmap (radially)
+    * @return Max distance from center of costmap to edge
+    */
+  double getMaxCostmapDist();
+
+
+  /**
    * @brief transform global plan to local applying constraints,
    * then prune global plan
    * @param robot_pose Pose of robot
@@ -101,12 +108,6 @@ protected:
   bool transformPose(
     const std::string & frame, const geometry_msgs::msg::PoseStamped & in_pose,
     geometry_msgs::msg::PoseStamped & out_pose) const;
-
-  /**
-    * @brief Get largest dimension of costmap (radially)
-    * @return Max distance from center of costmap to edge
-    */
-  double getMaxCostmapDist();
 
   /**
     * @brief Transform a pose to the global reference frame
