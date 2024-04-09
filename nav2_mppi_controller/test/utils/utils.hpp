@@ -22,6 +22,7 @@
 #include <rclcpp/executors.hpp>
 
 #include "tf2_ros/transform_broadcaster.h"
+#include "tf2_ros/static_transform_broadcaster.h"
 
 #include "nav2_costmap_2d/costmap_2d.hpp"
 #include "nav2_costmap_2d/costmap_2d_ros.hpp"
@@ -65,6 +66,27 @@ void sendTf(
     // Allow tf_buffer_ to be filled by listener
     waitSome(10ms, node);
   }
+}
+
+void sendStaticTf(
+  std::string_view source, std::string_view dest,
+  std::shared_ptr<tf2_ros::StaticTransformBroadcaster> static_tf_broadcaster,
+  std::shared_ptr<rclcpp_lifecycle::LifecycleNode> node)
+{
+  auto t = geometry_msgs::msg::TransformStamped();
+  t.header.frame_id = source;
+  t.child_frame_id = dest;
+
+  t.header.stamp = node->now() + rclcpp::Duration(3ms);
+  t.transform.translation.x = 0.0;
+  t.transform.translation.y = 0.0;
+  t.transform.translation.z = 0.0;
+  t.transform.rotation.x = 0.0;
+  t.transform.rotation.y = 0.0;
+  t.transform.rotation.z = 0.0;
+  t.transform.rotation.w = 1.0;
+
+  static_tf_broadcaster->sendTransform(t);
 }
 
 /**
