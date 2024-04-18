@@ -11,6 +11,7 @@ set(TEST_NAMES
   critic_manager_test
   optimizer_unit_tests
   velocity_test
+  velocity_test_2
 )
 
 foreach(name IN LISTS TEST_NAMES)
