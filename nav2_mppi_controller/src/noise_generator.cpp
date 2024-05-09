@@ -85,6 +85,10 @@ void NoiseGenerator::setNoisedControls(
   std::unique_lock<std::mutex> guard(noise_lock_);
   auto & s = settings_;
 
+  // FIXME: This rotates through noise which is more than the non threaded
+  // noise generation does.
+  // A fixed set should be faster AND use less memory at the expense of not being
+  // very noisy.
   if (noise_pregenerate_size_ != 0)
   {
     xt::static_shape<std::size_t, 3> sh =
@@ -145,6 +149,7 @@ void NoiseGenerator::preGenerateNoisedControls()
 {
   auto & s = settings_;
 
+  //FIXME: This mechanism does not create independent noise for vy_std or vz_std
   pregenerated_noise_.resize(noise_pregenerate_size_ * s.batch_size * s.time_steps);
   std::random_device rd;
   std::mt19937 gen(rd());
