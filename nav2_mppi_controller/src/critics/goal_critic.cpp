@@ -33,39 +33,9 @@ void GoalCritic::initialize()
     power_, weight_);
 }
 
-/**
- * @brief Check if the robot pose is within tolerance to the goal
- * @param pose_tolerance Pose tolerance to use
- * @param robot Pose of robot
- * @param path Path to retreive goal pose from
- * @return bool If robot is within tolerance to the goal
- */
-bool herewithinPositionGoalTolerance(
-  float pose_tolerance,
-  const geometry_msgs::msg::Pose & robot,
-  const models::Path & path)
-{
-  const auto goal_idx = path.x.shape(0) - 1;
-  const float goal_x = path.x(goal_idx);
-  const float goal_y = path.y(goal_idx);
-
-  const float pose_tolerance_sq = pose_tolerance * pose_tolerance;
-
-  const float dx = static_cast<float>(robot.position.x) - goal_x;
-  const float dy = static_cast<float>(robot.position.y) - goal_y;
-
-  float dist_sq = dx * dx + dy * dy;
-
-  if (dist_sq < pose_tolerance_sq) {
-    return true;
-  }
-
-  return false;
-}
-
 void GoalCritic::score(CriticData & data)
 {
-  if (!enabled_ || !herewithinPositionGoalTolerance(
+  if (!enabled_ || !utils::withinPositionGoalTolerance(
       threshold_to_consider_, data.state.pose.pose, data.path))
   {
     return;
